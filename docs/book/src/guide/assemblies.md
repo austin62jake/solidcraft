@@ -332,7 +332,8 @@ through another between two samples is missed. Parts are told apart by occurrenc
 sets tell them apart: an occurrence inside a sub-assembly placed twice is one part, so its two
 copies are not checked against each other. A check takes at most 256 bodies; on a large design,
 list the `occurrences` to check (an arm, with `against` the parts it must miss). When the work
-runs out it says `truncated` and the step it `checked_to`.
+runs out it says `truncated` and the step it `checked_to`, and it is not `clear`, even when nothing
+collided in the steps it checked.
 `joint.sweep {joint, from, to, index?, step?, refine?, occurrences?, against?, contact_sets?,
 report_gaps?, apply?}` drives one joint value from `from` toward `to` and answers how far it gets
 before parts touch: `stopped_at` (the last value clear of contact), `stopped_by` (the two parts
