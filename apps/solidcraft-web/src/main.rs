@@ -119,6 +119,27 @@ fn closes_design(key: &str, command: bool, shift: bool, alt: bool, design_shown:
     design_shown && command && !shift && !alt && key.eq_ignore_ascii_case("w")
 }
 
+/// The settings written to the browser's storage as soon as they change (#8644). eframe saves
+/// them only every 30 seconds, after a drawn frame, so a change made shortly before the tab
+/// closed was lost.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default, Debug)]
+struct PrefsWriter {
+    written: Option<String>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl PrefsWriter {
+    /// `prefs` if they are not the settings written last (they count as written from now on).
+    fn take(&mut self, prefs: String) -> Option<String> {
+        if self.written.as_deref() == Some(prefs.as_str()) {
+            return None;
+        }
+        self.written = Some(prefs.clone());
+        Some(prefs)
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::rc::Rc;
@@ -246,9 +267,37 @@ mod web {
         font_language: String,
         space_mouse: SpaceMouse,
         wheel_gestures: solidcraft_ui_egui::WebWheelGestures,
+        prefs_writer: crate::PrefsWriter,
     }
 
     impl Shell {
+        /// The settings as they are kept between visits: with the user's own language, not a
+        /// session-only English fallback.
+        fn persisted_prefs(&mut self) -> String {
+            let saved = self.font.persisted_language(&self.app.preferences.language).to_owned();
+            let live = std::mem::replace(&mut self.app.preferences.language, saved);
+            let prefs = self.app.prefs();
+            self.app.preferences.language = live;
+            prefs
+        }
+
+        /// A settings change goes to the browser's storage in the frame it is made (#8644).
+        /// Input is what changes settings, so a frame without any is skipped; eframe's own save
+        /// still catches anything else.
+        fn store_prefs(&mut self, ctx: &egui::Context) {
+            if !self.launch.persists() || ctx.input(|i| i.events.is_empty()) {
+                return;
+            }
+            let prefs = self.persisted_prefs();
+            let Some(prefs) = self.prefs_writer.take(prefs) else { return };
+            let stored =
+                web_sys::window().and_then(|w| w.local_storage().ok().flatten()).map(|s| s.set_item(solidcraft_ui_egui::prefs::STORAGE_KEY, &prefs));
+            if !matches!(stored, Some(Ok(()))) {
+                log::warn!("settings: the browser's storage did not take them; they are saved again later");
+                self.prefs_writer = crate::PrefsWriter::default();
+            }
+        }
+
         /// Files from the computer, writes to store, messages and the autosave.
         fn files_tick(&mut self, ctx: &egui::Context) {
             if !self.launch.persists() {
@@ -689,6 +738,7 @@ mod web {
                 self.recovery_prompt(&ctx);
             }
             self.watch_text_for_font(&ctx);
+            self.store_prefs(&ctx);
         }
         fn persist_egui_memory(&self) -> bool {
             self.launch.persists()
@@ -697,11 +747,8 @@ mod web {
             if !self.launch.persists() {
                 return;
             }
-            // Persist the user's own language, not a session-only English fallback.
-            let saved = self.font.persisted_language(&self.app.preferences.language).to_owned();
-            let live = std::mem::replace(&mut self.app.preferences.language, saved);
-            storage.set_string(solidcraft_ui_egui::prefs::STORAGE_KEY, self.app.prefs());
-            self.app.preferences.language = live;
+            let prefs = self.persisted_prefs();
+            storage.set_string(solidcraft_ui_egui::prefs::STORAGE_KEY, prefs);
         }
     }
 
@@ -865,6 +912,7 @@ mod web {
                             font_language,
                             space_mouse: SpaceMouse::default(),
                             wheel_gestures: solidcraft_ui_egui::WebWheelGestures::default(),
+                            prefs_writer: crate::PrefsWriter::default(),
                         }))
                     }),
                 )
@@ -1000,5 +1048,16 @@ mod tests {
         assert!(!closes_design("w", true, false, true, true));
         assert!(!closes_design("w", false, false, false, true));
         assert!(!closes_design("s", true, false, false, true));
+    }
+
+    /// A changed setting is written to the browser's storage when it changes, and the same
+    /// settings are not written again (#8644).
+    #[test]
+    fn changed_settings_are_written_once() {
+        let mut writer = PrefsWriter::default();
+        assert_eq!(writer.take(r#"{"a":1}"#.into()).as_deref(), Some(r#"{"a":1}"#), "the first settings are written");
+        assert_eq!(writer.take(r#"{"a":1}"#.into()), None, "the same settings are not written again");
+        assert_eq!(writer.take(r#"{"a":2}"#.into()).as_deref(), Some(r#"{"a":2}"#), "a change is written at once");
+        assert_eq!(writer.take(r#"{"a":2}"#.into()), None);
     }
 }
