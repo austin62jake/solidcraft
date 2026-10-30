@@ -171,10 +171,13 @@ fn decode_mesh_body(bytes: &[u8]) -> Option<solidcraft_kernel::Body> {
     let f64_at = |c: &[u8], at: usize| c.get(at..at + 8)?.try_into().ok().map(f64::from_le_bytes);
     let u32_at = |c: &[u8], at: usize| c.get(at..at + 4)?.try_into().ok().map(u32::from_le_bytes);
     let positions: Vec<solidcraft_geom::Vec3> = coordinates
-        .chunks_exact(24)
+        .as_chunks::<24>()
+        .0
+        .iter()
         .map(|c| Some(solidcraft_geom::Vec3::new(f64_at(c, 0)?, f64_at(c, 8)?, f64_at(c, 16)?)))
         .collect::<Option<_>>()?;
-    let triangles: Vec<[u32; 3]> = corners.chunks_exact(12).map(|c| Some([u32_at(c, 0)?, u32_at(c, 4)?, u32_at(c, 8)?])).collect::<Option<_>>()?;
+    let triangles: Vec<[u32; 3]> =
+        corners.as_chunks::<12>().0.iter().map(|c| Some([u32_at(c, 0)?, u32_at(c, 4)?, u32_at(c, 8)?])).collect::<Option<_>>()?;
     let color: Option<[f32; 3]> = serde_json::from_value(header.get("color").cloned().unwrap_or(Value::Null)).ok()?;
     let paint: Option<solidcraft_kernel::Paint> = serde_json::from_value(header.get("paint").cloned().unwrap_or(Value::Null)).ok()?;
     if color.is_some_and(|c| c.iter().any(|x| !x.is_finite())) {
