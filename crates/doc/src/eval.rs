@@ -944,7 +944,7 @@ impl ModelState {
         serde_json::to_string(&self.sheets).unwrap_or_default().hash(&mut h);
         // Construction axes, planes and points so far: features find them here by name, and a
         // result taken from the cache brings back the ones it was made with, so one moved past
-        // a feature must change the key (#9544). Designs without any keep their cache identities.
+        // a feature must change the key (#9544). A state without any hashes as before.
         if !self.construct.is_empty() {
             serde_json::to_string(&self.construct).unwrap_or_default().hash(&mut h);
         }
