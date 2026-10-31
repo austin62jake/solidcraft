@@ -376,9 +376,10 @@ pub fn adopt(app: &mut SolveApp, session: Session) {
         crate::design_properties::close_object(app);
         crate::sketch_attachment_ui::clear(app);
         app.session.replace_design(session);
-        // The blank design's record of its links goes with it; the new one's start now.
+        // The blank design's record of its links goes with it; the new one's start now, and
+        // the linked designs that changed while it was closed are read again (#9739).
         app.docs.link_stamps.clear();
-        crate::linked_source::note_unread(app);
+        crate::linked_source::update_changed(app);
         crate::render_workspace::reset_document(app);
         app.session.invalidate_view(rev);
         app.cam = Camera::default();
