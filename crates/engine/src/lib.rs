@@ -745,9 +745,12 @@ impl Session {
         self.replacements = replacements;
     }
 
-    /// The design has changes not in its file: in the document, or in what is hidden.
+    /// The design has changes not in its file: in the document, in what is hidden, or a
+    /// component moved and not captured yet (#9736).
     pub fn is_dirty(&self) -> bool {
-        (!Arc::ptr_eq(&self.doc, &self.saved) && *self.doc != *self.saved) || self.visibility != self.saved_visibility
+        (!Arc::ptr_eq(&self.doc, &self.saved) && *self.doc != *self.saved)
+            || self.visibility != self.saved_visibility
+            || !self.pending_moves.is_empty()
     }
     pub fn mark_saved(&mut self) {
         self.saved = self.doc.clone();
