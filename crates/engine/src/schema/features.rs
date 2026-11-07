@@ -9,11 +9,12 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::config::NameList;
 use super::types::{
     AngleExpr, AxisDir, AxisLine, ConventionParam, DirectionParam, EdgeRefs, ExtentKeyword, ExtrudeOperation, FacesParam, FeatureCommon,
     FilletCornerParam, FilletFitParam, FilletTurnParam, FilletTypeParam, FromPoint, GeoRefParam, IdOrName, LengthExpr, NumberExpr, OperationParam,
-    PlaneCommon, PlaneOrFace, Point3, PointExpr3, ProfilesParam, ScaleFactors, SketchRef, StringList, ThinSideParam, ToPoint, TouchingParam,
-    feature_common, present,
+    PlaneCommon, PlaneOrFace, PlaneParam, Point3, PointExpr3, ProfilesParam, ScaleFactors, SketchRef, StringList, ThinSideParam, ToPoint,
+    TouchingParam, feature_common, present,
 };
 
 /// Add a box primitive.
@@ -439,6 +440,30 @@ pub struct PlaneAtAngleParams {
     pub pivot: Option<GeoRefParam>,
     #[serde(flatten, deserialize_with = "feature_common")]
     pub common: PlaneCommon,
+}
+
+/// Copy features or bodies across a plane: the features replayed mirrored, or the bodies copied
+/// mirrored, each copy a body of its own unless `combine` joins it to its original. Give
+/// `features` or `bodies`: a call with neither is the handler's to refuse, with its message.
+/// Whether each name exists is the handler's to check.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct MirrorParams {
+    /// The features to mirror, by name. Read when `bodies` lists none.
+    #[serde(default)]
+    pub features: Option<NameList>,
+    /// The bodies to mirror, by name as the viewport shows them: a further instance's copy goes
+    /// where that instance is.
+    #[serde(default)]
+    pub bodies: Option<NameList>,
+    /// The plane to mirror across. The mirror follows a construction plane, and an explicit
+    /// plane's origin given as length expressions.
+    pub plane: PlaneParam,
+    /// Join each copy to its original. Default: false.
+    #[serde(default)]
+    pub combine: Option<bool>,
+    #[serde(flatten, deserialize_with = "feature_common")]
+    pub common: FeatureCommon,
 }
 
 /// Round edges of a body: a constant radius by default, or a chord, a curvature-continuous
